@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+node_modules/
+dist/
+audio_files/
+*.wav
+*.mp3
+*.webm
+postgres_data/
+.DS_Store

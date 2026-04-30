@@ -1,0 +1,46 @@
+# Project specific
+MASTER_BUILD_PROMPT.md
+session_report.pdf
+
+# Sensitive information
+.env
+*.env
+**/.env
+secrets.json
+credentials.json
+*.pem
+*.key
+
+# Dependencies
+node_modules/
+**/node_modules/
+__pycache__/
+**/__pycache__/
+*.pyc
+.venv/
+env/
+venv/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build and IDE
+dist/
+build/
+.vscode/
+.idea/
+
+# Large files and data
+audio_files/
+**/audio_files/
+postgres_data/
+*.wav
+*.mp3
+*.webm
+*.safetensors
+*.tar.gz
+*.zip
+*.7z
+*.pdf
