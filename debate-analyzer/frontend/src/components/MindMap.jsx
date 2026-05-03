@@ -1,5 +1,5 @@
 import ForceGraph2D from 'react-force-graph-2d';
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 
 const NODE_COLORS = {
   speaker:   '#534AB7',
@@ -11,6 +11,18 @@ const NODE_COLORS = {
 
 export function MindMap({ graphData, onNodeClick }) {
   const fgRef = useRef();
+  const containerRef = useRef();
+  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const { width } = entries[0].contentRect;
+      setDimensions({ width, height: Math.min(600, Math.max(400, width * 0.6)) });
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
   if (!graphData || !graphData.nodes || !graphData.edges) {
     return <div className="text-slate-400">Loading graph data...</div>;
@@ -35,7 +47,7 @@ export function MindMap({ graphData, onNodeClick }) {
   }, [onNodeClick]);
 
   return (
-    <div className="rounded-xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-900/50">
+    <div ref={containerRef} className="rounded-xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-900/50 w-full">
       <ForceGraph2D
         ref={fgRef}
         graphData={fgData}
@@ -59,8 +71,8 @@ export function MindMap({ graphData, onNodeClick }) {
           ctx.fillStyle = '#ffffff';
           ctx.fillText(label, node.x, node.y);
         }}
-        width={800}
-        height={500}
+        width={dimensions.width}
+        height={dimensions.height}
       />
     </div>
   );

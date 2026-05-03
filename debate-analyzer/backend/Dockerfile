@@ -22,4 +22,8 @@ RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
 
+# Pre-download models to avoid runtime network issues
+COPY pre_download_models.py .
+RUN python pre_download_models.py
+
 COPY . .

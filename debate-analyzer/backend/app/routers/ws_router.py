@@ -18,7 +18,8 @@ from app.workers.tasks import process_audio
 from app.services.vad_service import SilenceTracker, score_chunk
 from app.database import AsyncSessionLocal
 from app.models.db_models import Session
-import uuid, json, subprocess, os, aiofiles
+import uuid, json, subprocess, os, aiofiles, io, tempfile
+import numpy as np
 from pathlib import Path
 
 router = APIRouter()
@@ -50,18 +51,30 @@ async def audio_websocket(websocket: WebSocket, session_id: str):
                     await f.write(data['bytes'])
                     chunk_index += 1
                     
-                    # We approximate chunk_duration since webm decoding on the fly is heavy.
-                    # We'll use a rough 5 seconds for webm blobs or evaluate bytes size.
-                    # As a placeholder, assuming 5 seconds per chunk:
-                    chunk_duration = 5.0
+                    # Decode the webm chunk to raw PCM for VAD scoring
+                    try:
+                        with tempfile.NamedTemporaryFile(suffix='.webm', delete=True) as tmp_in:
+                            tmp_in.write(data['bytes'])
+                            tmp_in.flush()
+                            # Convert to raw f32le mono 16kHz for silero
+                            cmd = [
+                                'ffmpeg', '-y', '-i', tmp_in.name,
+                                '-ar', '16000', '-ac', '1', '-f', 'f32le', '-'
+                            ]
+                            proc = subprocess.run(cmd, capture_output=True)
+                            if proc.returncode == 0 and len(proc.stdout) >= 512 * 4:
+                                score = score_chunk(proc.stdout)
+                            else:
+                                score = 1.0  # Can't decode, assume speech
+                    except Exception:
+                        score = 1.0
+
+                    # Approximate duration from raw PCM bytes if successful, else estimate
+                    if 'proc' in locals() and proc.returncode == 0:
+                        chunk_duration = len(proc.stdout) / (16000 * 4) # f32 is 4 bytes
+                    else:
+                        chunk_duration = 5.0 # Fallback estimate
                     
-                    # Note: decoding webm to raw pcm is needed for accurate score.
-                    # For performance, this is mocked as assuming speech for webm if not decoded.
-                    # In production, use pydub to decode `data['bytes']` to raw pcm, then `score_chunk`.
-                    # E.g., raw_audio = pydub.AudioSegment.from_file(io.BytesIO(data['bytes'])).get_array_of_samples()
-                    # score = score_chunk(raw_audio)
-                    # For now, to keep it simple and runnable:
-                    score = 1.0 # Mock speech
                     tracker.update(score, chunk_duration)
                     
                     if tracker.is_silent:

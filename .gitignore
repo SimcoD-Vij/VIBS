@@ -35,6 +35,8 @@ build/
 # Large files and data
 audio_files/
 **/audio_files/
+hf_cache/
+**/hf_cache/
 postgres_data/
 *.wav
 *.mp3
@@ -44,3 +46,4 @@ postgres_data/
 *.zip
 *.7z
 *.pdf
+.cache/

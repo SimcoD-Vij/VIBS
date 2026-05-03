@@ -28,6 +28,30 @@ def process_audio(self, session_id: str, wav_path: str):
             return
             
         try:
+            # 0. Convert to standard wav if needed
+            final_wav_path = wav_path
+            if not wav_path.lower().endswith('.wav'):
+                print(f"Converting {wav_path} to standard WAV...")
+                temp_wav = wav_path.rsplit('.', 1)[0] + "_standard.wav"
+                import subprocess
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-y', '-i', wav_path,
+                        '-ar', '16000', '-ac', '1',
+                        temp_wav
+                    ], check=True, capture_output=True)
+                    final_wav_path = temp_wav
+                    print(f"Conversion successful: {final_wav_path}")
+                    
+                    # Update DB with the new path
+                    session_record.wav_path = final_wav_path
+                    db.commit()
+                except subprocess.CalledProcessError as e:
+                    print(f"FFmpeg conversion failed: {e.stderr.decode()}")
+                    # Fallback to original path and hope for the best
+            
+            wav_path = final_wav_path # Use the converted path for subsequent steps
+
             session_record.status = "transcribing"
             session_record.progress_percent = 5
             db.commit()
@@ -106,16 +130,38 @@ def process_audio(self, session_id: str, wav_path: str):
             from whisperx.diarize import DiarizationPipeline
             diarize_segments = None
             try:
-                # Use a non-gated community model as primary
-                diarize_model = DiarizationPipeline(
-                    model_name="fatymatariq/speaker-diarization-3.1",
-                    use_auth_token=settings.HF_TOKEN, 
-                    device=device
-                )
-                diarize_segments = diarize_model(wav_path, min_speakers=2, max_speakers=10)
+                print(f"Starting diarization for {session_id}...")
+                
+                # Try 1: Official gated model
+                try:
+                    print("Attempting to load official pyannote/speaker-diarization-3.1...")
+                    diarize_model = DiarizationPipeline(
+                        model_name="pyannote/speaker-diarization-3.1",
+                        use_auth_token=settings.HF_TOKEN, 
+                        device=device
+                    )
+                    # Check if model loaded (whisperx wrapper might hide failure)
+                    if hasattr(diarize_model, 'model') and diarize_model.model is None:
+                        raise ValueError("Official model failed to load (likely gated).")
+                    
+                    diarize_segments = diarize_model(wav_path)
+                except Exception as e1:
+                    print(f"Official model failed: {e1}. Trying non-gated community model...")
+                    # Try 2: Non-gated community model
+                    diarize_model = DiarizationPipeline(
+                        model_name="fatymatariq/speaker-diarization-3.1",
+                        use_auth_token=settings.HF_TOKEN, 
+                        device=device
+                    )
+                    print("Diarization model loaded. Running inference...")
+                    # Remove hardcoded speaker counts to prevent hangs on ambiguous audio
+                    diarize_segments = diarize_model(wav_path)
+                    if diarize_segments is None:
+                        raise ValueError("Diarization returned None.")
+                    print(f"Diarization complete for {session_id}. Found {len(diarize_segments)} segments.")
             except Exception as de:
-                print(f"Diarization failed: {de}. Falling back to single speaker.")
-                # We will handle None diarize_segments in the next step
+                print(f"All diarization attempts failed for {session_id}: {de}. Falling back to single speaker.")
+                print("TIP: Make sure you have accepted the terms at https://hf.co/pyannote/speaker-diarization-3.1")
 
             session_record.progress_percent = 75
             db.commit()
@@ -271,7 +317,10 @@ def build_graph(self, session_id: str, topics: list):
             graph_json = call_graph_llm(prompt, llm_client)
             
             # 7-D: Detect shifts
-            shifts = detect_topic_shifts(graph_json)
+            segments = db.query(Segment).filter(Segment.session_id == session_id).all()
+            segments_data = [{"text": s.text, "start": s.start_time, "speaker_label": s.speaker_label} 
+                             for s in segments]
+            shifts = detect_topic_shifts(graph_json, segments_data)
             
             # 7-E: Evaluate
             eval_score = evaluate_graph(graph_json, llm_client)

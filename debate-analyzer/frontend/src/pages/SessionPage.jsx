@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { SpeakerCard } from '../components/SpeakerCard';
 import { MindMap } from '../components/MindMap';
@@ -9,6 +9,7 @@ import ReactMarkdown from 'react-markdown';
 
 export function SessionPage() {
   const { sessionId } = useParams();
+  const navigate = useNavigate();
   const [status, setStatus] = useState({ status: 'pending', progress_percent: 0 });
   const [result, setResult] = useState(null);
   const [activeTab, setActiveTab] = useState('speakers');
@@ -88,6 +89,12 @@ export function SessionPage() {
       <div className="max-w-6xl mx-auto">
         <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6 border-b border-slate-700/50">
           <div>
+            <button 
+              onClick={() => navigate('/')} 
+              className="text-slate-400 hover:text-slate-200 text-sm flex items-center gap-1 mb-2 transition-colors"
+            >
+              ← New Session
+            </button>
             <h1 className="text-2xl font-bold text-slate-100">Session Analysis</h1>
             <p className="text-slate-400 text-sm mt-1">
               Duration: {Math.floor(result.session.duration_seconds / 60)}m {Math.floor(result.session.duration_seconds % 60)}s 

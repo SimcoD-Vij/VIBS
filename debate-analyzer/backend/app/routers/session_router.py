@@ -32,7 +32,8 @@ async def get_session_result(session_id: str, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=404, detail="Session not found")
         
     if session.status != "complete":
-        return {"status": "processing"}, 202
+        from fastapi.responses import JSONResponse
+        return JSONResponse(content={"status": "processing"}, status_code=202)
         
     # Fetch speakers
     speakers_result = await db.execute(select(Speaker).where(Speaker.session_id == session_id))
